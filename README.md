@@ -269,11 +269,11 @@ Experimental approaches should not be interpreted as production features unless 
 
 ## Author
 
-**Maen Qawasmeh**
+**Akash Kumar Nayak **
 
 Computer Science | AI & Machine Learning
 
-[LinkedIn](https://www.linkedin.com/in/maen-qawasmeh-951ba0211/)
+[LinkedIn](https://www.linkedin.com/in/akash-kumarnayak/)
 
 ## License and Data
 
