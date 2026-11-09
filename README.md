@@ -25,7 +25,7 @@ The project demonstrates an end-to-end RAG workflow, including PDF processing, t
 
 The chatbot displays a loading indicator while retrieving relevant medical information and generating a response using the local LLM.
 
-![Medical RAG Chatbot - Loading Indicator](assets/screenshots/M1.png)
+![Medical RAG Chatbot - Loading Indicator](assets/screenshots/Screenshot 2026-11-10 032018.png)
 
 ### 2. Generated Answer with Retrieved Sources
 
