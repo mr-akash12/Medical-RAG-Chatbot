@@ -9,7 +9,7 @@ using LangChain to generate context-based medical answers.
 import os
 
 from dotenv import load_dotenv
-from pinecone import Pinecone, DenseVectorQuery
+from pinecone import Pinecone
 
 from langchain_ollama import ChatOllama
 from langchain_core.documents import Document
@@ -20,82 +20,183 @@ from langchain_classic.chains.combine_documents import (
     create_stuff_documents_chain
 )
 
-from src.helper import download_hugging_face_embeddings
 from src.prompt import prompt
 
 
-# Load environment variables
-load_dotenv()
+# --------------------------------------------------
+# Load Environment Variables
+# --------------------------------------------------
 
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+BASE_DIR = os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))
+)
+
+load_dotenv(
+    os.path.join(BASE_DIR, ".env")
+)
+
+PINECONE_API_KEY = os.getenv(
+    "PINECONE_API_KEY"
+)
 
 INDEX_NAME = "medicalbot"
 NAMESPACE = "medical-rag"
 
 
+# --------------------------------------------------
+# Create RAG Chain
+# --------------------------------------------------
+
 def create_rag_chain():
 
     if not PINECONE_API_KEY:
-        raise ValueError("PINECONE_API_KEY is missing!")
+        raise ValueError(
+            "PINECONE_API_KEY is missing! "
+            "Please check your .env file."
+        )
 
     # Initialize Pinecone
-    pc = Pinecone(api_key=PINECONE_API_KEY)
-    index = pc.index(INDEX_NAME)
+    pc = Pinecone(
+        api_key=PINECONE_API_KEY
+    )
 
-    # Initialize embedding model
-    embeddings = download_hugging_face_embeddings()
+    index = pc.index(
+        INDEX_NAME
+    )
 
-    # Initialize Ollama
+    # Initialize Ollama LLM
     llm = ChatOllama(
         model="qwen3:4b-instruct",
         temperature=0.4,
-        num_predict=500
+        num_predict=800
     )
 
-    # Retrieve medical documents
+    # --------------------------------------------------
+    # Retrieve Documents from Pinecone
+    # --------------------------------------------------
+
     def retrieve_documents(inputs):
 
         question = inputs["input"]
-        query_vector = embeddings.embed_query(question)
 
         results = index.documents.search(
             namespace=NAMESPACE,
-            top_k=3,
+
             score_by=[
-                DenseVectorQuery(
-                    field="vector",
-                    values=query_vector
-                )
+                {
+                    "type": "embed",
+                    "field": "chunk_text",
+                    "query": question
+                }
             ],
-            include_fields=["text", "source", "page"]
+
+            top_k=3,
+
+            include_fields=[
+                "chunk_text",
+                "source",
+                "page"
+            ]
         )
 
         documents = []
 
-        for match in results.matches:
-            documents.append(
-                Document(
-                    page_content=match.get("text") or "",
-                    metadata={
-                        "source": match.get("source"),
-                        "page": match.get("page"),
-                        "score": match.score
-                    }
+        # Handle Pinecone search results
+        hits = getattr(
+            results,
+            "matches",
+            None
+        )
+
+        if hits is None:
+
+            result_obj = getattr(
+                results,
+                "result",
+                None
+            )
+
+            hits = getattr(
+                result_obj,
+                "hits",
+                []
+            )
+
+        for hit in hits:
+
+            # Extract document fields
+            fields = getattr(
+                hit,
+                "fields",
+                {}
+            ) or {}
+
+            # Extract text
+            chunk_text = fields.get(
+                "chunk_text",
+                ""
+            )
+
+            if not chunk_text:
+                continue
+
+            # Extract score safely
+            score = getattr(
+                hit,
+                "score",
+                getattr(
+                    hit,
+                    "_score",
+                    None
                 )
+            )
+
+            # Create LangChain Document
+            document = Document(
+                page_content=chunk_text,
+
+                metadata={
+                    "source": fields.get(
+                        "source"
+                    ),
+
+                    "page": fields.get(
+                        "page"
+                    ),
+
+                    "score": score
+                }
+            )
+
+            documents.append(
+                document
             )
 
         return documents
 
+    # --------------------------------------------------
     # Create Retriever
-    retriever = RunnableLambda(retrieve_documents)
+    # --------------------------------------------------
 
-    # Create QA Chain
-    question_answer_chain = create_stuff_documents_chain(
-        llm,
-        prompt
+    retriever = RunnableLambda(
+        retrieve_documents
     )
 
-    # Create RAG Chain
+    # --------------------------------------------------
+    # Create Question Answer Chain
+    # --------------------------------------------------
+
+    question_answer_chain = (
+        create_stuff_documents_chain(
+            llm,
+            prompt
+        )
+    )
+
+    # --------------------------------------------------
+    # Create Final RAG Chain
+    # --------------------------------------------------
+
     rag_chain = create_retrieval_chain(
         retriever,
         question_answer_chain
