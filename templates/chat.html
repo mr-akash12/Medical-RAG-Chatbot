@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Medical RAG Chatbot</title>
+
+    <!-- Bootstrap CSS -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css"
+    />
+
+    <!-- Font Awesome -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+    />
+
+    <!-- Custom CSS -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  </head>
+
+  <body>
+    <div class="container-fluid h-100">
+      <div class="row justify-content-center h-100">
+        <div class="col-md-8 col-xl-6 chat">
+          <div class="card">
+            <!-- Chat Header -->
+            <div class="card-header msg_head">
+              <div class="d-flex bd-highlight">
+                <div class="img_cont">
+                  <img
+                    src="https://cdn-icons-png.flaticon.com/512/387/387569.png"
+                    class="rounded-circle user_img"
+                    alt="Medical Chatbot"
+                  />
+                  <span class="online_icon"></span>
+                </div>
+
+                <div class="user_info">
+                  <span>Medical RAG Chatbot</span>
+                  <p>Ask me anything about medical topics!</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chat Messages -->
+            <div
+              id="messageFormeight"
+              class="card-body msg_card_body"
+              aria-live="polite"
+            ></div>
+
+            <!-- Chat Input -->
+            <div class="card-footer">
+              <form id="messageArea" class="input-group">
+                <input
+                  type="text"
+                  id="text"
+                  name="msg"
+                  placeholder="Type your medical question..."
+                  autocomplete="off"
+                  class="form-control type_msg"
+                  required
+                />
+
+                <div class="input-group-append">
+                  <button
+                    type="submit"
+                    id="send"
+                    class="input-group-text send_btn"
+                    aria-label="Send message"
+                  >
+                    <i class="fas fa-location-arrow"></i>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chatbot JavaScript -->
+    <script>
+      $(document).ready(function () {
+        const chatBox = $("#messageFormeight");
+
+        function getTime() {
+          const date = new Date();
+
+          return date.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        }
+
+        function appendMessage(message, sender) {
+          const isUser = sender === "user";
+
+          const wrapper = $("<div>").addClass(
+            isUser
+              ? "d-flex justify-content-end mb-4"
+              : "d-flex justify-content-start mb-4",
+          );
+
+          const messageContainer = $("<div>").addClass(
+            isUser ? "msg_cotainer_send" : "msg_cotainer",
+          );
+
+          // Safely display text without interpreting HTML
+          messageContainer.text(message);
+
+          const time = $("<span>")
+            .addClass(isUser ? "msg_time_send" : "msg_time")
+            .text(getTime());
+
+          messageContainer.append(time);
+          wrapper.append(messageContainer);
+
+          chatBox.append(wrapper);
+
+          // Scroll to latest message
+          chatBox.scrollTop(chatBox[0].scrollHeight);
+        }
+
+        $("#messageArea").on("submit", function (event) {
+          event.preventDefault();
+
+          const rawText = $("#text").val().trim();
+
+          if (!rawText) {
+            return;
+          }
+
+          appendMessage(rawText, "user");
+
+          $("#text").val("");
+          $("#text").prop("disabled", true);
+          $("#send").prop("disabled", true);
+          // Show loading indicator
+          const loadingMessage = $("<div>").addClass(
+            "d-flex justify-content-start mb-4 loading_message",
+          );
+
+          loadingMessage.append(
+            $("<div>")
+              .addClass("msg_cotainer")
+              .text("Medical Chatbot is thinking..."),
+          );
+
+          chatBox.append(loadingMessage);
+          chatBox.scrollTop(chatBox[0].scrollHeight);
+
+          // Send question to Flask backend
+          $.ajax({
+            url: "/get",
+            type: "POST",
+            data: {
+              msg: rawText,
+            },
+
+            success: function (data) {
+              // Display chatbot answer
+              appendMessage(data.answer, "bot");
+
+              // Display retrieved sources
+              if (data.sources && data.sources.length > 0) {
+                const sourcesContainer =
+                  $("<div>").addClass("retrieved_sources");
+
+                const sourcesTitle = $("<div>")
+                  .addClass("sources_title")
+                  .text("Retrieved Sources");
+
+                sourcesContainer.append(sourcesTitle);
+
+                data.sources.forEach(function (source) {
+                  const sourceItem = $("<div>").addClass("source_item");
+
+                  const pageNumber =
+                    source.page !== null && source.page !== undefined
+                      ? Number(source.page) + 1
+                      : "Unknown";
+
+                  sourceItem.text(source.file + " — PDF Page " + pageNumber);
+
+                  sourcesContainer.append(sourceItem);
+                });
+
+                const wrapper = $("<div>").addClass(
+                  "d-flex justify-content-start mb-4",
+                );
+
+                wrapper.append(sourcesContainer);
+
+                chatBox.append(wrapper);
+
+                // Scroll to latest message
+                chatBox.scrollTop(chatBox[0].scrollHeight);
+              }
+            },
+
+            error: function () {
+              appendMessage(
+                "Sorry, something went wrong. Please try again.",
+                "bot",
+              );
+            },
+
+            complete: function () {
+              // Remove loading indicator
+              $(".loading_message").remove();
+
+              // Enable input again
+              $("#text").prop("disabled", false);
+              $("#send").prop("disabled", false);
+              $("#text").focus();
+            },
+          });
+        });
+      });
+    </script>
+  </body>
+</html>

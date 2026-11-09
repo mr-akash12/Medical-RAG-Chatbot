@@ -1,0 +1,21 @@
+
+# Development and Experimentation Dependencies
+
+-r requirements.txt
+
+# Local Vector Search Experiments
+faiss-cpu==1.15.1
+
+# Reranking / Embedding Experiments
+# sentence-transformers is already installed
+# through requirements.txt
+
+# Jupyter Notebook
+jupyter
+ipykernel
+ipywidgets
+
+# Data Analysis
+pandas
+numpy
+matplotlib
